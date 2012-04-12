@@ -1,28 +1,21 @@
-
-
 import java.io.IOException;
 import java.net.*;
 import java.util.Random;
 
 public class SnakesAndLaddersServer {
 
-	public ClientHandler[] clients = new ClientHandler[5]; 
+	public ServerConsole console;
+
+	private int playerNum;
+	private ClientHandler[] clients; 
+	private Random rand = new Random();
+	private int currentPlayerID = 0;
+	private int[] linkMap = new int[101];
 	
-	private void listenForClients(int port) throws IOException {
-		System.out.println("Waiting for 5 clients to connect to port "+port+".");
-		ServerSocket s = new ServerSocket(port);
-		for (int i = 0; i < 5; i++) {
-			clients[i] = new ClientHandler(this, s.accept(), i);
-			clients[i].start();
-			clients[i].sendString("i "+i);
-			sendToAll("n "+(i+1));
-		}
-	}
-	
-	private void playGame() throws InterruptedException {
-		int[] playerPos = { 0, 0, 0, 0, 0 };
-		
-		int[] linkMap = new int[101];
+	public SnakesAndLaddersServer(ServerConsole console, int playerNum) {
+		this.console = console;
+		this.playerNum = playerNum;
+		clients = new ClientHandler[playerNum];
 		
 		for (int i = 0; i < linkMap.length; i++)
 			linkMap[i] = i;
@@ -46,32 +39,23 @@ public class SnakesAndLaddersServer {
 		linkMap[91] = 71;
 		linkMap[95] = 75;
 		linkMap[98] = 80;
-		
-		
-		//Thread.sleep(1500);
+	}
 
-		Random rand = new Random();
-		System.out.println("Starting game.");
-		while (true) {
-			for (int id = 0; id < 5; id++) {
-				if(clients[id]==null)
-					continue;
-				for(int dice = rand.nextInt(6)+1; dice>0; dice--) {
-					sendToAll("m "+id+" "+(playerPos[id]++));
-					Thread.sleep(200);
-				}
-				sendToAll("m "+id+" "+playerPos[id]);
-				int newPos = playerPos[id]>100?101:linkMap[playerPos[id]];
-				if(playerPos[id] != newPos) {
-					Thread.sleep(200);
-					sendToAll("m "+id+" "+(playerPos[id]=newPos));
-				}
-				if(playerPos[id]>100) {
-					notifyWin(id);
-					return;
-				}
-			}
+	public void listenForClientsAndStartGame(int port) throws IOException, InterruptedException {
+		console.println("Waiting for "+playerNum+" clients to connect to port "+port+".");
+		ServerSocket s = new ServerSocket(port);
+		for (int id = 0; id < playerNum; id++) {
+			clients[id] = new ClientHandler(this, s.accept(), id);
+			console.println("Client "+id+" has joined the game.");
+			clients[id].start();
+			clients[id].sendString("i "+id);
 		}
+		
+		console.println("Starting game.");
+		/* Sleep to give the clients time to initialise. */
+		Thread.sleep(1000);
+		/* Let a random player start. */
+		sendToAll("p "+(currentPlayerID = rand.nextInt(playerNum)));
 	}
 	
 	public void sendToAll(String msg) {
@@ -80,25 +64,67 @@ public class SnakesAndLaddersServer {
 				client.sendString(msg);
 	}
 	
-	public void notifyWin(int id) {
-		sendToAll("w "+id);
-		System.out.println("Client "+id+" has won.");
-		System.out.println("Waiting for clients to disconnect.");
-	}
-
-	public static void main(String[] args) {
-		System.out.println("Starting Snakes and Ladders Server.");
-		SnakesAndLaddersServer server = new SnakesAndLaddersServer();
+	public void rollDice(int id) {
+		if(id != currentPlayerID)
+			return;
+		
+		currentPlayerID = -1;
+		sendToAll("p "+currentPlayerID);
+		
+		/* Play */
 		try {
-			int port = 8250;
-			if(args.length>0)
-				port = Integer.parseInt(args[0]);
-			else
-				System.out.println("To change default port ("+port+"), input a custom port as command-line argument.");
-			server.listenForClients(port);
-			server.playGame();
-		} catch (Exception e) {
+			int dice = rand.nextInt(6)+1;
+			sendToAll("d "+id+" "+dice);
+			
+			/* If move goes over 100, don't move. */
+			if((clients[id].playerPos+dice) <= 100) {
+				for(int movesLeft = dice; movesLeft>0; movesLeft--) {
+					sendToAll("m "+id+" "+(clients[id].playerPos++));
+					Thread.sleep(200);
+				}
+				sendToAll("m "+id+" "+clients[id].playerPos);
+				int newPos = linkMap[clients[id].playerPos];
+				if(clients[id].playerPos != newPos) {
+					Thread.sleep(200);
+					sendToAll("m "+id+" "+(clients[id].playerPos=newPos));
+				}
+				if(clients[id].playerPos==100) {
+					notifyWin(id);
+					return;
+				}
+			} else
+				Thread.sleep(1000);
+		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+		
+		currentPlayerID = ((id+1)%playerNum);
+		sendToAll("p "+currentPlayerID);
+	}
+	
+	public void updatePlayerName(int id, String name) {
+		clients[id].playerName = name;
+		String nameList = "";
+		for (int j = 0; j < clients.length; j++)
+			if(clients[j] != null)
+				nameList += " "+clients[j].playerName;
+			else
+				nameList += " ....................";
+		sendToAll("l"+nameList);
+	}
+	
+	public void notifyWin(int id) {
+		sendToAll("w "+id);
+		console.println("Client "+id+" has won.");
+		console.println("Waiting for clients to disconnect.");
+	}
+
+	public void onClientDC(int id) {
+		clients[id] = null;
+		/* Check if any other clients are still there and if not, notify console. */
+		for (ClientHandler client : clients)
+			if (client != null)
+				return;
+		console.println("All clients have disconnected. It is safe to quit.");
 	}
 }
