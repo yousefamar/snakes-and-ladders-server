@@ -1,8 +1,11 @@
+package gui;
 import java.awt.*;
 import java.awt.event.*;
 import java.text.*;
 
 import javax.swing.*;
+
+import core.GameServer;
 
 @SuppressWarnings("serial")
 public class ServerGUI extends JPanel implements ActionListener {
@@ -14,6 +17,7 @@ public class ServerGUI extends JPanel implements ActionListener {
 	public ServerGUI() {
 		super(new GridBagLayout());
 
+		/* Create and add title. */
 		JLabel title = new JLabel(" Snakes And Ladders Server ", JLabel.CENTER);
 		title.setFont(new Font("MV Boli", Font.BOLD, 25));
 		GridBagConstraints cons0 = new GridBagConstraints();
@@ -21,6 +25,7 @@ public class ServerGUI extends JPanel implements ActionListener {
 		cons0.insets = new Insets(6, 0, 0, 0);
 		add(title, cons0);
 		
+		/* Create and add subtitle. */
 		JLabel subtitle = new JLabel("(C) Yousef Amar 2012");
 		subtitle.setFont(new Font("MV Boli", Font.PLAIN, 10));
 		GridBagConstraints cons1 = new GridBagConstraints();
@@ -29,6 +34,7 @@ public class ServerGUI extends JPanel implements ActionListener {
 		cons1.insets = new Insets(0, 0, 25, 40);
 		add(subtitle, cons1);
 		
+		/* Create and add port input. */
 		JPanel portPanel = new JPanel();
   		portPanel.add(new JLabel("Port:"));
   		portPanel.add(new JPanel());
@@ -42,6 +48,7 @@ public class ServerGUI extends JPanel implements ActionListener {
 		cons2.gridy = 2;
   		add(portPanel, cons2);
   		
+  		/* Create and add player number slider. */
   		JPanel sliderSettingsPanel = new JPanel(new GridLayout(0, 1));
   		sliderSettingsPanel.add(new JLabel("Number of Players", JLabel.CENTER));
   		playerNumSlider = new JSlider(JSlider.HORIZONTAL, 2, 5, 3);
@@ -57,6 +64,7 @@ public class ServerGUI extends JPanel implements ActionListener {
 		cons3.gridy = 3;
   		add(sliderSettingsPanel, cons3);
 
+  		/* Create and add start button. */
   		startButton = new JButton("Start");
   		startButton.addActionListener(this);
   		/* Create a sub-panel that uses FlowLayout to fix size issues. */
@@ -71,33 +79,16 @@ public class ServerGUI extends JPanel implements ActionListener {
 	@Override
 	public void actionPerformed(ActionEvent event) {
 		if (event.getSource() == startButton) {
-			final ServerConsole serverConsole = new ServerConsole();
+			ServerConsole serverConsole = new ServerConsole();
+			/* Clear GUI and add the server console panel instead. */
 			removeAll();
 			add(serverConsole);
 			validate();
 
-			/* Start the server in a new thread so it doesn't interfere with GUI rendering. */
-			new Thread(new Runnable() {
-				public void run() {
-					serverConsole.println("Starting Snakes and Ladders Server.");
-					SnakesAndLaddersServer server = new SnakesAndLaddersServer(serverConsole, playerNumSlider.getValue());
-					try {
-						server.listenForClientsAndStartGame((Integer)portField.getValue());
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-				}
-			}, "Main Server Thread").start();
+			/* Start the server in a new thread (doesn't interfere with GUI rendering).
+	  		 * All subsequent code is called from this thread. */
+			serverConsole.println("Starting Snakes and Ladders Server.");
+			new Thread(new GameServer((Integer)portField.getValue(), playerNumSlider.getValue(), serverConsole), "Main Server Thread").start();
 		}
-	}
-
-	public static void main(String[] args) {
-		JFrame frame = new JFrame("Snakes And Ladders Server");
-      	frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.add(new ServerGUI());
-  		frame.setResizable(false);
-  		frame.pack();
-  		frame.setLocationRelativeTo(null);
-      	frame.setVisible(true);
 	}
 }
