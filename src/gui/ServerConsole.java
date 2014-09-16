@@ -14,7 +14,7 @@ public class ServerConsole extends JPanel {
 		super(new GridLayout());
 		//setPreferredSize(new Dimension(800, 800));
 		consoleText.setEditable(false);
-        consoleText.setRows(17);
+        consoleText.setRows(16);
         consoleText.setColumns(33);
         add(new JScrollPane(consoleText));
 	}
